@@ -89,3 +89,10 @@ func (t *Token) readFieldNames() {
 	}
 	return
 }
+
+func (t *Token) readFieldType() {
+	for i, f := range t.messages[t.currentMsgName] {
+		fmmm := t.takeString(f.name+" = ", "(")
+		t.messages[t.currentMsgName][i].typ = fmmm
+	}
+}
