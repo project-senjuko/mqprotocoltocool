@@ -74,7 +74,7 @@ func (t *Token) readFieldMapID() {
 func (t *Token) readFieldNames() {
 	fmstr := t.takeString("}, new String[]{", "}, new Object[]{") // FieldMap key string
 	for i, fme := range strings.Split(fmstr, ", ") {
-		t.messages[t.currentMsgName][i].name = fme
+		t.messages[t.currentMsgName][i].name = fme[1 : len(fme)-1]
 	}
 	return
 }
