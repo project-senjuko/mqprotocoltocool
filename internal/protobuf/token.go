@@ -47,8 +47,19 @@ func NewToken(f string) *Token {
 func (t *Token) ReadFromPath() {}
 
 func (t *Token) takeString(h, e string) string {
-	t.i = t.ei + len(h) + strings.Index(t.fileString[t.ei:], h)
-	t.ei = t.i + strings.Index(t.fileString[t.i:], e)
+	r := strings.Index(t.fileString[t.ei:], h)
+	if r < 0 {
+		fmt.Println("[warn] target first index is -1")
+	}
+
+	t.i = t.ei + len(h) + r
+
+	r = strings.Index(t.fileString[t.i:], e)
+	if r < 0 {
+		fmt.Println("[warn] target last index is -1")
+	}
+
+	t.ei = t.i + r
 	return t.fileString[t.i:t.ei]
 }
 
