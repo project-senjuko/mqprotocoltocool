@@ -18,23 +18,6 @@ import (
 	"strings"
 )
 
-type Token struct {
-	fileString string
-
-	protobufName string
-	messages     map[string][]ProtoToken
-
-	i              int
-	ei             int
-	currentMsgName string
-}
-
-type ProtoToken struct {
-	name string
-	tag  uint64
-	typ  string
-}
-
 func NewToken(f string) *Token {
 	return &Token{
 		fileString: f,
