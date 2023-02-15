@@ -21,12 +21,12 @@ import (
 type Token struct {
 	fileString string
 
+	protoName string
+	messages  map[string][]ProtoToken
+
 	i              int
 	ei             int
 	currentMsgName string
-
-	protoName string
-	messages  map[string][]ProtoToken
 }
 
 type ProtoToken struct {
@@ -46,31 +46,53 @@ func NewToken(f string) *Token {
 
 func (t *Token) ReadFromPath() {}
 
-func (t *Token) takeString(h, e string) string {
+func (t *Token) takeString(h, e string) (string, bool) {
 	r := strings.Index(t.fileString[t.ei:], h)
 	if r < 0 {
-		fmt.Println("[warn] target first index is -1")
+		return "", false
 	}
 
 	t.i = t.ei + len(h) + r
-
 	r = strings.Index(t.fileString[t.i:], e)
 	if r < 0 {
-		fmt.Println("[warn] target last index is -1")
+		return "", false
 	}
 
 	t.ei = t.i + r
-	return t.fileString[t.i:t.ei]
+	return t.fileString[t.i:t.ei], true
 }
 
-func (t *Token) readMessageName() {
-	t.currentMsgName = t.takeString(" extends MessageMicro<", ">")
+func (t *Token) ReadAll() {
+	for t.readMessageName() {
+		if t.readFieldMapID() {
+			t.readFieldNames()
+			t.readFieldType()
+			fmt.Println("[info] success read protobuf message:", t.currentMsgName)
+			continue
+		}
+
+		fmt.Println("[info]", t.currentMsgName, "is empty message")
+	}
+}
+
+func (t *Token) readMessageName() bool {
+	var ok bool
+	t.currentMsgName, ok = t.takeString(" extends MessageMicro<", ">")
+	if !ok {
+		fmt.Println("[warn] cannot find protobuf message")
+		return false
+	}
 	t.messages[t.currentMsgName] = []ProtoToken{}
+	return true
 }
 
-func (t *Token) readFieldMapID() {
-	fmstr := t.takeString("__fieldMap__ = MessageMicro.initFieldMap(new int[]{", "}") // FieldMap value string
-	for _, fme := range strings.Split(fmstr, ", ") {
+func (t *Token) readFieldMapID() bool {
+	fmstr, _ := t.takeString("__fieldMap__ = MessageMicro.initFieldMap(new int[", "}") // FieldMap value string
+	if fmstr[:1] == "0" {
+		return false
+	}
+
+	for _, fme := range strings.Split(fmstr[2:], ", ") {
 		i, err := strconv.ParseUint(fme, 10, 64)
 		if err != nil {
 			fmt.Println("[warn] parse fieldmap string to int token failure in", fme, "of", t.currentMsgName, ".")
@@ -79,20 +101,21 @@ func (t *Token) readFieldMapID() {
 
 		t.messages[t.currentMsgName] = append(t.messages[t.currentMsgName], ProtoToken{tag: i >> 3})
 	}
-	return
+
+	return true
 }
 
 func (t *Token) readFieldNames() {
-	fmstr := t.takeString("}, new String[]{", "}, new Object[]{") // FieldMap key string
-	for i, fme := range strings.Split(fmstr, ", ") {
-		t.messages[t.currentMsgName][i].name = fme[1 : len(fme)-1]
+	fn, _ := t.takeString("}, new String[]{", "}, new Object[]{") // FieldMap key string
+	for i, fne := range strings.Split(fn, ", ") {
+		t.messages[t.currentMsgName][i].name = fne[1 : len(fne)-1]
 	}
 	return
 }
 
 func (t *Token) readFieldType() {
 	for i, f := range t.messages[t.currentMsgName] {
-		fmmm := t.takeString(f.name+" = ", "(")
-		t.messages[t.currentMsgName][i].typ = fmmm
+		ft, _ := t.takeString(f.name+" = ", "(")
+		t.messages[t.currentMsgName][i].typ = ft
 	}
 }
