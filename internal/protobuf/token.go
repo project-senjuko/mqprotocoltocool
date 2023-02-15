@@ -13,9 +13,10 @@
 package protobuf
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 func NewToken(f string) *Token {
@@ -27,27 +28,27 @@ func NewToken(f string) *Token {
 
 func (t *Token) ReadAll() {
 	if !t.isProtobufFile() {
-		fmt.Println("[warn] not a protobuf file")
+		log.Warn().Msg("not a protobuf file")
 		return
 	}
 
 	ok := t.readProtobufName()
 	if !ok {
-		fmt.Println("[error] cannot get protobuf file name")
+		log.Error().Msg("cannot get protobuf file name")
 		return
 	}
 
-	fmt.Println("[info] success read protobuf file name:", t.protobufName)
+	log.Info().Str("name", t.protobufName).Msg("success read protobuf file name")
 
 	for t.readMessageName() {
 		if t.readFieldTags() {
 			t.readFieldNames()
 			t.readFieldTypes()
-			fmt.Println("[info] success read protobuf message:", t.currentMsgName)
+			log.Info().Str("msg", t.currentMsgName).Msg("success read protobuf message")
 			continue
 		}
 
-		fmt.Println("[info]", t.currentMsgName, "is empty message")
+		log.Info().Str("msg", t.currentMsgName).Msg("is empty")
 	}
 }
 
@@ -84,7 +85,7 @@ func (t *Token) readMessageName() bool {
 	var ok bool
 	t.currentMsgName, ok = t.takeString(" extends MessageMicro<", ">")
 	if !ok {
-		fmt.Println("[warn] cannot find more protobuf message")
+		log.Warn().Msg("cannot find more protobuf message")
 		return false
 	}
 	t.messages[t.currentMsgName] = []ProtoToken{}
@@ -100,7 +101,8 @@ func (t *Token) readFieldTags() bool {
 	for _, fme := range strings.Split(fmstr[2:], ", ") {
 		i, err := strconv.ParseUint(fme, 10, 64)
 		if err != nil {
-			fmt.Println("[erro] parse fieldmap string to int token failure in", fme, "of", t.currentMsgName, ".")
+			log.Error().Str("token", fme).Str("msg", t.currentMsgName).
+				Msg("parse fieldmap tag string token to int failure")
 			continue
 		}
 
