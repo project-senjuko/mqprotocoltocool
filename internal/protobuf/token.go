@@ -41,14 +41,16 @@ func (t *Token) ReadAll() {
 	log.Info().Str("name", t.protobufName).Msg("success read protobuf file name")
 
 	for t.readMessageName() {
-		if t.readFieldTags() {
-			t.readFieldNames()
-			t.readFieldTypes()
-			log.Info().Str("msg", t.currentMsgName).Msg("success read protobuf message")
+		if !t.readFieldTags() {
+			log.Info().Str("msg", t.currentMsgName).Msg("is empty")
+			continue
+		}
+		if !t.readFieldNames() {
 			continue
 		}
 
-		log.Info().Str("msg", t.currentMsgName).Msg("is empty")
+		t.readFieldTypes()
+		log.Info().Str("msg", t.currentMsgName).Msg("success read protobuf message")
 	}
 }
 
@@ -93,8 +95,8 @@ func (t *Token) readMessageName() bool {
 }
 
 func (t *Token) readFieldTags() bool {
-	fmstr, _ := t.takeString("__fieldMap__ = MessageMicro.initFieldMap(new int[", "}") // FieldMap value string
-	if fmstr[:1] == "0" {
+	fmstr, ok := t.takeString("__fieldMap__ = MessageMicro.initFieldMap(new int[", "}") // FieldMap value string
+	if !ok || fmstr[:1] == "0" {
 		return false
 	}
 
@@ -112,17 +114,25 @@ func (t *Token) readFieldTags() bool {
 	return true
 }
 
-func (t *Token) readFieldNames() {
-	fn, _ := t.takeString("}, new String[]{", "}, new Object[]{") // FieldMap key string
-	for i, fne := range strings.Split(fn, ", ") {
-		t.messages[t.currentMsgName][i].name = fne[1 : len(fne)-1]
+func (t *Token) readFieldNames() bool {
+	fn, ok := t.takeString("}, new String[]{", "}, new Object[]{") // FieldMap key string
+	if !ok {
+		log.Error().Str("msg", t.currentMsgName).Msg("wtf the field names")
+		return false
 	}
-	return
+	for i, fne := range strings.Split(fn, ", ") {
+		t.messages[t.currentMsgName][i].name = strings.ReplaceAll(fne, `"`, "")
+	}
+	return true
 }
 
 func (t *Token) readFieldTypes() {
 	for i, f := range t.messages[t.currentMsgName] {
-		ft, _ := t.takeString(f.name+" = ", "(")
+		ft, ok := t.takeString(f.name+" = ", "(")
+		if !ok {
+			log.Error().Str("field", f.name).Msg("wtf the field type")
+			t.messages[t.currentMsgName][i].typ = f.name
+		}
 		t.messages[t.currentMsgName][i].typ = ft
 	}
 }
