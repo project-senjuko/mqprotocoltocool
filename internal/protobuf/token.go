@@ -21,8 +21,8 @@ import (
 type Token struct {
 	fileString string
 
-	protoName string
-	messages  map[string][]ProtoToken
+	protobufName string
+	messages     map[string][]ProtoToken
 
 	i              int
 	ei             int
@@ -42,9 +42,31 @@ func NewToken(f string) *Token {
 	}
 }
 
-// 检测 import 是否有 MessageMicro，没有则跳过
+func (t *Token) ReadAll() {
+	if !t.isProtobufFile() {
+		fmt.Println("[warn] not a protobuf file")
+		return
+	}
 
-func (t *Token) ReadFromPath() {}
+	ok := t.readProtobufName()
+	if !ok {
+		fmt.Println("[error] cannot get protobuf file name")
+		return
+	}
+
+	fmt.Println("[info] success read protobuf file name:", t.protobufName)
+
+	for t.readMessageName() {
+		if t.readFieldTags() {
+			t.readFieldNames()
+			t.readFieldTypes()
+			fmt.Println("[info] success read protobuf message:", t.currentMsgName)
+			continue
+		}
+
+		fmt.Println("[info]", t.currentMsgName, "is empty message")
+	}
+}
 
 func (t *Token) takeString(h, e string) (string, bool) {
 	r := strings.Index(t.fileString[t.ei:], h)
@@ -62,31 +84,31 @@ func (t *Token) takeString(h, e string) (string, bool) {
 	return t.fileString[t.i:t.ei], true
 }
 
-func (t *Token) ReadAll() {
-	for t.readMessageName() {
-		if t.readFieldMapID() {
-			t.readFieldNames()
-			t.readFieldType()
-			fmt.Println("[info] success read protobuf message:", t.currentMsgName)
-			continue
-		}
-
-		fmt.Println("[info]", t.currentMsgName, "is empty message")
+func (t *Token) isProtobufFile() bool {
+	if strings.Index(t.fileString, "import com.tencent.mobileqq.pb.MessageMicro;") < 0 {
+		return false
 	}
+	return true
+}
+
+func (t *Token) readProtobufName() bool {
+	var ok bool
+	t.protobufName, ok = t.takeString("public final class ", " {")
+	return ok
 }
 
 func (t *Token) readMessageName() bool {
 	var ok bool
 	t.currentMsgName, ok = t.takeString(" extends MessageMicro<", ">")
 	if !ok {
-		fmt.Println("[warn] cannot find protobuf message")
+		fmt.Println("[warn] cannot find more protobuf message")
 		return false
 	}
 	t.messages[t.currentMsgName] = []ProtoToken{}
 	return true
 }
 
-func (t *Token) readFieldMapID() bool {
+func (t *Token) readFieldTags() bool {
 	fmstr, _ := t.takeString("__fieldMap__ = MessageMicro.initFieldMap(new int[", "}") // FieldMap value string
 	if fmstr[:1] == "0" {
 		return false
@@ -95,7 +117,7 @@ func (t *Token) readFieldMapID() bool {
 	for _, fme := range strings.Split(fmstr[2:], ", ") {
 		i, err := strconv.ParseUint(fme, 10, 64)
 		if err != nil {
-			fmt.Println("[warn] parse fieldmap string to int token failure in", fme, "of", t.currentMsgName, ".")
+			fmt.Println("[erro] parse fieldmap string to int token failure in", fme, "of", t.currentMsgName, ".")
 			continue
 		}
 
@@ -113,7 +135,7 @@ func (t *Token) readFieldNames() {
 	return
 }
 
-func (t *Token) readFieldType() {
+func (t *Token) readFieldTypes() {
 	for i, f := range t.messages[t.currentMsgName] {
 		ft, _ := t.takeString(f.name+" = ", "(")
 		t.messages[t.currentMsgName][i].typ = ft
